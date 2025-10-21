@@ -5,6 +5,7 @@ const Pharmacy = require('../models/Pharmacy');
 const User = require('../models/User');
 const asyncHandler = require('express-async-handler');
 const Coupon = require('../models/Coupon');
+const { sendSms } = require('../services/smsService');
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -87,6 +88,19 @@ const createOrder = asyncHandler(async (req, res) => {
       { code: String(couponCode).toUpperCase() },
       { $inc: { usedCount: 1 } }
     );
+  }
+  // Send SMS confirmation to customer (non-blocking on errors)
+  try {
+    const customer = await User.findById(req.user.id);
+    if (customer?.phone) {
+      const itemSummary = order.items.map((i) => `${i.name} x${i.quantity}`).join(', ');
+      const text = `Hi ${customer.name || 'Customer'}, your order ${order.id} at ${pharmacy.name} was placed. Items: ${itemSummary}. Total: $${Number(order.totalAmount).toFixed(2)}.`;
+      await sendSms(customer.phone, text);
+    } else {
+      console.warn('SMS not sent: customer phone number missing');
+    }
+  } catch (err) {
+    console.error('Failed to send order SMS:', err?.message || err);
   }
 
   res.status(201).json(order);
