@@ -40,13 +40,18 @@ const createOrder = asyncHandler(async (req, res) => {
       throw new Error(`Not enough stock for ${medicine.name}`);
     }
 
+    const unitPrice =
+      medicine.isDiscounted && medicine.discountedPrice != null
+        ? Number(medicine.discountedPrice)
+        : Number(medicine.price);
+
     orderItems.push({
       medicineId: medicine._id,
       name: medicine.name,
       quantity: item.quantity,
-      price: medicine.price,
+      price: unitPrice, 
     });
-    totalAmount += medicine.price * item.quantity;
+    totalAmount += unitPrice * item.quantity;
 
     // Reduce stock
     medicine.stock -= item.quantity;
