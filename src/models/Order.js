@@ -51,6 +51,16 @@ const orderSchema = mongoose.Schema(
       type: Number,
       default: 0,
     },
+    
+    // Pharmacy instructions field
+    instructions: [
+      {
+        text: { type: String, required: true },
+        icon: { type: String, default: 'info' }, // 'info', 'warning', 'food', 'water', 'time', etc.
+        priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ],
   },
   { timestamps: true, toJSON: { virtuals: true, versionKey: false, transform: (_doc, ret) => {
     ret.id = ret._id;
