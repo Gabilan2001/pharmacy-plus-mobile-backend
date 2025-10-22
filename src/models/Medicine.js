@@ -36,6 +36,28 @@ const medicineSchema = mongoose.Schema(
     category: {
       type: String,
     },
+    expiryDate: {
+      type: Date,
+      required: true,
+    },
+    storageInstructions: {
+      type: String,
+      default: 'Store in a cool, dry place',
+    },
+    manufacturer: {
+      type: String,
+      required: true,
+    },
+    isDiscounted: {
+      type: Boolean,
+      default: false,
+    },
+    discountedPrice: {
+      type: Number,
+    },
+    discountPercentage: {
+      type: Number,
+    },
   },
   { timestamps: true, toJSON: { virtuals: true, versionKey: false, transform: (_doc, ret) => {
     ret.id = ret._id;
@@ -43,6 +65,18 @@ const medicineSchema = mongoose.Schema(
     return ret;
   } } }
 );
+
+// Virtual to check if medicine is near expiry (within 3 months)
+medicineSchema.virtual('isNearExpiry').get(function() {
+  const threeMonthsFromNow = new Date();
+  threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+  return this.expiryDate <= threeMonthsFromNow;
+});
+
+// Virtual to check if medicine is expired
+medicineSchema.virtual('isExpired').get(function() {
+  return this.expiryDate < new Date();
+});
 
 const Medicine = mongoose.model('Medicine', medicineSchema);
 

@@ -8,7 +8,7 @@ const cloudinary = require('../config/cloudinary');
 // @route   POST /api/medicines
 // @access  Private/PharmacyOwner
 const addMedicine = asyncHandler(async (req, res) => {
-  const { name, description, price, stock, pharmacyId, category } = req.body;
+  const { name, description, price, stock, pharmacyId, category,expiryDate, storageInstructions, manufacturer } = req.body;
 
   if (!req.file) {
     res.status(400);
@@ -41,6 +41,9 @@ const addMedicine = asyncHandler(async (req, res) => {
     imagePublicId: req.file.filename,
     pharmacyId,
     category,
+    expiryDate,
+    storageInstructions,
+    manufacturer,
   });
 
   if (medicine) {
@@ -55,7 +58,7 @@ const addMedicine = asyncHandler(async (req, res) => {
 // @route   PUT /api/medicines/:id
 // @access  Private/PharmacyOwner
 const updateMedicine = asyncHandler(async (req, res) => {
-  const { name, description, price, stock, category } = req.body;
+  const { name, description, price, stock, category,expiryDate, storageInstructions, manufacturer } = req.body;
 
   const medicine = await Medicine.findById(req.params.id);
 
@@ -71,6 +74,9 @@ const updateMedicine = asyncHandler(async (req, res) => {
     medicine.price = price || medicine.price;
     medicine.stock = stock || medicine.stock;
     medicine.category = category || medicine.category;
+    medicine.expiryDate = expiryDate || medicine.expiryDate;
+    medicine.storageInstructions = storageInstructions || medicine.storageInstructions;
+    medicine.manufacturer = manufacturer || medicine.manufacturer;
 
     if (req.file) {
       if (medicine.imagePublicId) {
@@ -144,6 +150,97 @@ const getMedicinesByPharmacyId = asyncHandler(async (req, res) => {
   res.json(medicines);
 });
 
+// @desc    Get medicines near expiry
+// @route   GET /api/medicines/expiry/near
+// @access  Public
+const getMedicinesNearExpiry = asyncHandler(async (req, res) => {
+  const threeMonthsFromNow = new Date();
+  threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+
+  const medicines = await Medicine.find({
+    expiryDate: { $lte: threeMonthsFromNow, $gte: new Date() },
+    stock: { $gt: 0 },
+  }).populate('pharmacyId', 'name address');
+
+  res.json(medicines);
+});
+
+// @desc    Apply discount to medicine near expiry
+// @route   PUT /api/medicines/:id/discount
+// @access  Private/PharmacyOwner
+const applyDiscount = asyncHandler(async (req, res) => {
+  const { discountPercentage } = req.body;
+
+  if (!discountPercentage || discountPercentage < 0 || discountPercentage > 100) {
+    res.status(400);
+    throw new Error('Please provide a valid discount percentage (0-100)');
+  }
+
+  const medicine = await Medicine.findById(req.params.id);
+
+  if (!medicine) {
+    res.status(404);
+    throw new Error('Medicine not found');
+  }
+
+  const pharmacy = await Pharmacy.findById(medicine.pharmacyId);
+  if (pharmacy.ownerId.toString() !== req.user.id.toString()) {
+    res.status(401);
+    throw new Error('Not authorized to apply discount to this medicine');
+  }
+
+  medicine.isDiscounted = true;
+  medicine.discountPercentage = discountPercentage;
+  medicine.discountedPrice = medicine.price - (medicine.price * discountPercentage / 100);
+
+  const updatedMedicine = await medicine.save();
+
+  // TODO: Send push notifications to nearby customers
+  // You can implement notification logic here
+
+  res.json(updatedMedicine);
+});
+
+// @desc    Remove discount from medicine
+// @route   PUT /api/medicines/:id/discount/remove
+// @access  Private/PharmacyOwner
+const removeDiscount = asyncHandler(async (req, res) => {
+  const medicine = await Medicine.findById(req.params.id);
+
+  if (!medicine) {
+    res.status(404);
+    throw new Error('Medicine not found');
+  }
+
+  const pharmacy = await Pharmacy.findById(medicine.pharmacyId);
+  if (pharmacy.ownerId.toString() !== req.user.id.toString()) {
+    res.status(401);
+    throw new Error('Not authorized to modify this medicine');
+  }
+
+  medicine.isDiscounted = false;
+  medicine.discountPercentage = undefined;
+  medicine.discountedPrice = undefined;
+
+  const updatedMedicine = await medicine.save();
+
+  res.json(updatedMedicine);
+});
+
+// @desc    Get discounted medicines
+// @route   GET /api/medicines/discounted/all
+// @access  Public
+const getDiscountedMedicines = asyncHandler(async (req, res) => {
+  const medicines = await Medicine.find({
+    isDiscounted: true,
+    stock: { $gt: 0 },
+    expiryDate: { $gte: new Date() },
+  }).populate('pharmacyId', 'name address');
+
+  res.json(medicines);
+});
+
+
 module.exports = {
   addMedicine,
   updateMedicine,
@@ -151,4 +248,8 @@ module.exports = {
   getMedicines,
   getMedicineById,
   getMedicinesByPharmacyId,
+  getMedicinesNearExpiry,
+  applyDiscount,
+  removeDiscount,
+  getDiscountedMedicines,
 };
