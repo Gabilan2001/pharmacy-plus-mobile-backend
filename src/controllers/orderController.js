@@ -193,12 +193,65 @@ const assignDeliveryPerson = asyncHandler(async (req, res) => {
   res.json(updatedOrder);
 });
 
+// @desc    Add or update instructions for an order
+// @route   PUT /api/orders/:id/instructions
+// @access  Private/PharmacyOwner
+const updateOrderInstructions = asyncHandler(async (req, res) => {
+  const { instructions } = req.body;
+
+  if (!instructions || !Array.isArray(instructions)) {
+    res.status(400);
+    throw new Error('Instructions must be provided as an array');
+  }
+  
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404);
+    throw new Error('Order not found');
+  }
+
+  const pharmacy = await Pharmacy.findById(order.pharmacyId);
+
+  if (!pharmacy) {
+    res.status(404);
+    throw new Error('Pharmacy not found');
+  }
+
+  // Check if user is pharmacy owner or admin
+  if (pharmacy.ownerId.toString() !== req.user.id.toString() && req.user.role !== 'admin') {
+    res.status(401);
+    throw new Error('Not authorized to update instructions for this order');
+  }
+
+  // Only allow updating instructions if order is still in packing status
+  if (order.status !== 'packing') {
+    res.status(400);
+    throw new Error('Instructions can only be updated while order is in packing status');
+  }
+
+  // Validate and format instructions
+  const formattedInstructions = instructions.map(instruction => ({
+    text: instruction.text,
+    icon: instruction.icon || 'info',
+    priority: instruction.priority || 'medium',
+    createdAt: new Date()
+  }));
+
+  order.instructions = formattedInstructions;
+  const updatedOrder = await order.save();
+
+  res.json(updatedOrder);
+});
+
+
 module.exports = {
   createOrder,
   getMyOrders,
   getPharmacyOrders,
   updateOrderStatus,
   assignDeliveryPerson,
+  updateOrderInstructions,
 };
 
 // Additional controllers for admin and delivery person
