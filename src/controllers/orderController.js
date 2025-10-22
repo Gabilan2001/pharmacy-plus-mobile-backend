@@ -49,7 +49,7 @@ const createOrder = asyncHandler(async (req, res) => {
 
     // Reduce stock
     medicine.stock -= item.quantity;
-    await medicine.save();
+    await medicine.save({validateBeforeSave: false});
   }
 
   // Coupon logic (flat amount discount)
